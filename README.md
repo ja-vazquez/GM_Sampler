@@ -33,5 +33,7 @@ or you could build up your own likelihood function, as:
 		...
 
 Some toy models.
-![](https://github.com/ja-vazquez/GM_Sampler/blob/master/gauss.jpg?raw=true =10x)
-![](https://github.com/ja-vazquez/GM_Sampler/blob/master/ring.jpg?raw=true =10x)
+
+
+![](https://github.com/ja-vazquez/GM_Sampler/blob/master/gauss.jpg?raw=true =5x)
+![](https://github.com/ja-vazquez/GM_Sampler/blob/master/ring.jpg?raw=true =5x)
