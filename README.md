@@ -4,11 +4,14 @@ Massively parallelizable sampling algorithm
 
 
 Here we present a new sampling method to be used in cosmology. 
-Its main advantage over the standard MCMCsampling is that it is trivially paralellizable over larger number of 
-nodes and with an appropriately chosen wayof selecting covariance matrix might outperform the MCMC algorithm. 
-It performs excellently in 2-dimensionaltoy examples and reproduces the results of standard algorithm in a realistic cosmological setting.
+Its main advantage over the standard MCMC 
+sampling is that it is trivially paralellizable over larger number of 
+nodes and with an appropriately chosen way of selecting covariance matrix 
+might outperform the MCMC algorithm. 
+It performs excellently in 2-dimensional toy examples and reproduces the 
+results of standard algorithm in a realistic cosmological setting.
 
-[Here is more detailed and technical description.](https://github.com/slosar/GMSampler)
+[Here is a more detailed and technical description.](https://github.com/slosar/GMSampler)
 
 ###Code
 
@@ -17,18 +20,18 @@ should be incorporated into the [SimpleMC](https://github.com/ja-vazquez/SimpleM
 
 ###Toy model
 
-There is a toy model version, which can be run by
+There is also a toy model version, which can be run by
 
 
 	python testgame.py like
 
-where *like* represents the likelihood to explore ={gauss, ring, box}, 
-or you could built include un likelihood function, on:
+*like* represents the likelihood to explore ={gauss, ring, box}, 
+or you could build up your own likelihood function, as:
 
 	def like(x):
 		...
 		...
 
 Some toy models.
-![](https://github.com/ja-vazquez/GM_Sampler/blob/master/gauss.jpg)![](https://github.com/ja-vazquez/GM_Sampler/blob/master/ring.jpg)
-
+![](https://github.com/ja-vazquez/GM_Sampler/blob/master/gauss.jpg?raw=true =500x)
+![](https://github.com/ja-vazquez/GM_Sampler/blob/master/ring.jpg?raw=true =500x)
