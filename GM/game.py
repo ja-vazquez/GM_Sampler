@@ -117,9 +117,9 @@ class Game:
         self.priorlow=None
         self.priorhigh=None
         self.pickleBetween=False
-
-    def run(self):
+        self.verbose =True
         
+    def run(self):
         if self.fastpars==None:
             self.N1f=0
         done=False
@@ -186,6 +186,7 @@ class Game:
         effsamp=wei.sum()
 
         self.sample_list=flist
+        
         print "#G=",len(Gausses), "maxlike=",maxlike,"wemax=",wemax,"effsamp=",effsamp
         self.effsamp=effsamp
         self.wemax=wemax
@@ -245,7 +246,8 @@ class Game:
                     toget.append(parspm)
                     toget.append(parsmp)
 
-        print "Doing covariance matrix",len(toget), N
+        if self.verbose:
+            print "Doing covariance matrix",len(toget), N
         likes=self.like(toget)
 
         like0=likes.pop(0)
@@ -261,8 +263,8 @@ class Game:
                 icov[i,j]=-der
                 icov[j,i]=-der
 
-
-        print "Checking diagonal derivatives,",
+        if self.verbose:
+            print "Checking diagonal derivatives,",
         fx=0
         for i in range(N):
             if icov[i,i]<0:
@@ -270,12 +272,13 @@ class Game:
                 icov[i,:]=0
                 icov[:,i]=0
                 icov[i,i]=1/self.sigreg2[i]
-        print "fixed:",fx
-
-        print "Trying cholesky:",
+        if self.verbose:        
+            print "fixed:",fx
+            print "Trying cholesky:",
         try:
             ch=la.cholesky(icov)
-            print "OK"
+            if self.verbose:
+                print "OK"
         except:
             print "Failed, removing negative eigenvectors"
             evl,evc=la.eig(icov)
@@ -288,7 +291,8 @@ class Game:
             icov=dot(dot(evc, diag(evl)),transpose(evc))
              
         cov=la.inv(icov)
-        print "Checking directions that are too small/big,",
+        if self.verbose:
+            print "Checking directions that are too small/big,",
         fx=0
         fxs=0
         for i in range(N):
@@ -303,8 +307,8 @@ class Game:
                 cov[i,:]*=fact
                 cov[:,i]*=fact
 
-
-        print "fixed:",fxs,fx
+        if self.verbose:
+            print "fixed:",fxs,fx
         #print cov
         G=Gaussian(around,self.blow*cov, self.fastpars)    
         return G
@@ -350,19 +354,22 @@ class Game:
         return slist,G
 
 
-def plotel(G,i=0, j=1,fmt='r-',times=1):
+def plotel(G,i=0, j=1,fmt='r-', times=1, verbose=False):
     cov=array([[G.cov[i,i], G.cov[i,j]],[G.cov[j,i], G.cov[j,j]]])
     if i==j:
         cov[1,0]=0
         cov[0,1]=0
-    print cov
+    if verbose:
+        print cov
     val,vec=la.eig(cov)
     vec=vec.T
 
     vec[0]*=sqrt(real(val[0]))*times
     vec[1]*=sqrt(real(val[1]))*times
-    print G.mean[i],G.mean[j]
-    pylab.plot(G.mean[i],G.mean[j],'bo')
+    
+    if verbose:
+        print G.mean[i],G.mean[j]
+    pylab.plot(G.mean[i],G.mean[j],'ro')
     pylab.plot([G.mean[i]-vec[0][0],G.mean[i]+vec[0][0]],
                [G.mean[j]-vec[0][1],G.mean[j]+vec[0][1]],fmt)
 
