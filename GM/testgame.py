@@ -14,13 +14,14 @@ def likemany(x):
 if sys.argv[1]=='gauss':
     def like(x):
         return -((x[0])**2+(x[1])**2/1.0-1.5*x[0]*x[1])/2.0
-    ga=gs.Game(likemany,[2.5,-0.5],[1.0,1.0])
-    ga.N1=500
-    ga.maxiter=20
+    ga=gs.Game(likemany,[0.5,-1.5],[1.0,1.0])
+    ga.N1=10
+    ga.maxiter= 3
     ga.N1f=0
     ga.fastpars=[1]
     ga.blow=1.3
     ga.mineffsamp=8000
+    ga.fixedcov= False
     ga.verbose = False
     sname='gauss.pdf'
     ga.run()
@@ -32,6 +33,10 @@ elif sys.argv[1]=='ring':
         return -(r2-4.0)**2/(2*0.5**2)
     ga=gs.Game(likemany,[3.5,0.0],[0.4,0.4])
     ga.blow=2.0
+    ga.N1=50
+    ga.maxiter=30
+    ga.fixedcov= False
+    ga.verbose =False
     sname='ring.pdf'
     ga.run()
 
@@ -42,18 +47,18 @@ elif sys.argv[1]=='box':
             return -30
         else:
             return 0
-    ga=gs.Game(likemany,[0.5,0.0],[1.0,1.0])
+    ga=gs.Game(likemany,[2.5,0.0],[1.0,1.0])
     #ga.priorlow=array([-2.5,-2.5])
     #ga.priorhigh=array([+2.5,+2.5])
-    ga.N1=3000
+    ga.N1=50
     ga.mineffsamp=6000
-    ga.maxiter=50
-    ga.fixedcov=True
-    ga.fixedcovuse=array([[2,0],[0,2]])
+    ga.maxiter=20
+    ga.fixedcov= False
+    ga.fixedcovuse= sp.array([[2,0],[0,2]])
     ga.run()
     sname='box.pdf'
 else:
-    stop ("define")
+    sp.stop ("define")
 
 
 
@@ -87,6 +92,7 @@ for i in range(Np):
     for j in range(Np):
         y= cmin+(j+0.5)*cstep
         trvals[j,i]= sp.exp(like([x,y]))
+
 
 trvalsa= trvals/trvals.sum()
 wsumsa = wsums/wsums.sum()

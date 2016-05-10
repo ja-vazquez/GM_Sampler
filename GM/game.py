@@ -99,7 +99,7 @@ class Gaussian:
 
 class Game:
     def __init__ (self, likefuncmany, par0, sigreg=0.0):
-        #random.seed(10)
+        random.seed(10)
         self.like=likefuncmany ## returns log like
         self.sigreg=array(sigreg)
         self.sigreg2=self.sigreg**2
@@ -119,114 +119,121 @@ class Game:
         self.pickleBetween=False
         self.verbose =True
         
+        
+        
     def run(self):
-        if self.fastpars==None:
-            self.N1f=0
-        done=False
-        toexplore=self.toexplore
-        badlist=[]
-        self.Gausses=[]
-        self.SamList=[]
+        if self.fastpars == None:
+            self.N1f= 0
+        done= False
+        toexplore= self.toexplore
+        badlist= []
+        self.Gausses= []
+        self.SamList= []
+        
         while not done:
-            sample_list, G=self.isample (toexplore)
+            sample_list, G= self.isample (toexplore)
             self.Gausses.append(G)
-            self.SamList+=sample_list
-
-            toexplore=self.rebuild_samples(self.SamList, self.Gausses)
+            self.SamList += sample_list
+            
+            toexplore= self.rebuild_samples(self.SamList, self.Gausses)
             
             if self.pickleBetween:
-                if (len(self.Gausses)%100==1):
-                    fname='/tmp/game'+str(len(self.Gausses))+'.pickle'
-                    cPickle.dump(self,open(fname,'w'),-1)
-
-            if (len(self.Gausses)>=self.maxiter):
+                if (len(self.Gausses)%100 == 1):
+                    fname='/tmp/game'+str(len(self.Gausses)) + '.pickle'
+                    cPickle.dump(self,open(fname,'w'), -1)
+            if (len(self.Gausses) >= self.maxiter):
                 print "Max iter exceeded"
                 done=True
-            if (self.effsamp>self.mineffsamp):
+            if (self.effsamp > self.mineffsamp):
                 done=True
 
-    def gausses_eval(self,sam):
-        if len(sam.glikes)!=len(self.Gausses):
+
+
+    def gausses_eval(self, sam):
+        if len(sam.glikes) != len(self.Gausses):
             stop("SHIT")
-        probi=(exp(array(sam.glikes))).sum()
+        probi= (exp(array(sam.glikes))).sum()
         return probi
 
+
+
     def rebuild_samples(self, SamList,Gausses):
-        maxlike=-1e30
-        gmaxlike=-1e30
+        maxlike= -1e30
+        gmaxlike= -1e30
+        #get maxlike for target and G's
         for sa in SamList:
-            if (sa.like>maxlike):
-                maxlike=sa.like
-                maxlikesa=sa
-            sa.glike=self.gausses_eval(sa) 
-            if (sa.glike>gmaxlike):
-                gmaxlike=sa.glike
+            if (sa.like  > maxlike):
+                maxlike  = sa.like
+                maxlikesa= sa
+            sa.glike= self.gausses_eval(sa) 
+            if (sa.glike > gmaxlike):
+                gmaxlike = sa.glike
                 
-        gmaxlike2=self.gausses_eval(maxlikesa)
+        gmaxlike2= self.gausses_eval(maxlikesa)
         #gmaxlike=gmaxlike2
-        wemax=0.0
-        flist=[]
-        wemax=0.0
-        parmaxw=None
-        effsamp=0
-        for sa in SamList:
-            rellike=exp(sa.like-maxlike)
-            glike=sa.glike/gmaxlike
-            we=rellike/glike
-            sa.we=we
-            if we>wemax:
-                wemax=we
-                parmaxw=sa.pars
-            if we>self.wemin:
+        wemax  = 0.0
+        flist  = []
+        wemax  = 0.0
+        parmaxw= None
+        effsamp= 0
+        for sa in SamList:        #Eq 6
+            rellike= exp(sa.like-maxlike)
+            glike  = sa.glike/gmaxlike
+            we     = rellike/glike
+            sa.we  = we
+            if we> wemax:
+                wemax= we         #highest importance weight
+                parmaxw= sa.pars
+            if we> self.wemin:
                 flist.append(sa)
 
         #The highest weight counts one, others less
-        wei=array([sa.we for sa in SamList])
+        wei = array([sa.we for sa in SamList])
         wei/=wei.max()
-        effsamp=wei.sum()
+        effsamp= wei.sum()        #Eq 7
 
         self.sample_list=flist
         
-        print "#G=",len(Gausses), "maxlike=",maxlike,"wemax=",wemax,"effsamp=",effsamp
-        self.effsamp=effsamp
-        self.wemax=wemax
+        print "#G=",len(Gausses), "maxlike=",maxlike, "wemax=",wemax, "effsamp=",effsamp
+        self.effsamp= effsamp
+        self.wemax= wemax
         return parmaxw
 
                         
     def getcov(self, around):
-        N=self.N
+        N= self.N
 
         if (self.fixedcov):
-            if (self.fixedcovuse!=None):
-                G=Gaussian(around,self.fixedcovuse,self.fastpars) 
+            if (self.fixedcovuse != None):
+                G=Gaussian(around, self.fixedcovuse, self.fastpars) 
                 return G
             else:
                 cov=zeros((N,N))
                 for i in range(N):
-                    cov[i,i]=self.sigreg2[i]
-                #print cov
-                G=Gaussian(around,cov,self.fastpars)    
+                    cov[i,i]= self.sigreg2[i]
+                G=Gaussian(around, cov, self.fastpars)    
                 return G
 
-        icov=zeros((N,N))
-        delta=self.sigreg/20.0
-        toget=[]
+        icov= zeros((N,N))
+        delta= self.sigreg/20.0
+        toget= []
         toget.append(around)
         
         ### This is a kinda ugly hack
         ### We repeat the exactly the same loop twice.
         ### first populating where to evaluate like 
         ### and the popping hoping for perfect sync
-        fastpars=self.fastpars
-        if fastpars==None:
-            fastpars=[]
-
+        fastpars= self.fastpars
+        
+        if fastpars == None:
+            fastpars= []
 
         for i in range(N):
             parspi=around*1.0
             parsmi=around*1.0
             parspi[i]+=delta[i]
             parsmi[i]-=delta[i]
+            
             for j in range(i,N):
                 if (i==j):
                     toget.append(parspi)
@@ -245,11 +252,12 @@ class Game:
                     toget.append(parsmm)
                     toget.append(parspm)
                     toget.append(parsmp)
+                
 
         if self.verbose:
             print "Doing covariance matrix",len(toget), N
         likes=self.like(toget)
-
+        
         like0=likes.pop(0)
         for i in range(N):
             for j in range(i,N):
@@ -262,7 +270,7 @@ class Game:
                     #    der=0
                 icov[i,j]=-der
                 icov[j,i]=-der
-
+        
         if self.verbose:
             print "Checking diagonal derivatives,",
         fx=0
@@ -314,17 +322,15 @@ class Game:
         return G
 
 
+
     def isample (self, zeropar):
-        
-
-
         ## Get local covariance matrix
         G=self.getcov(zeropar)
         
         ### first update the old samples
         for i,s in enumerate(self.SamList):
-            self.SamList[i].glikes.append(G.like(s.pars))
-            
+            self.SamList[i].glikes.append(G.like(s.pars))    
+                
         slist=[]
         lmany=[]
         fastsub=[False]+self.N1f*[True]
@@ -343,14 +349,16 @@ class Game:
                 if self.priorhigh!=None:
                     if ((par>self.priorhigh).any()):
                         continue
+                   
                 glikel=[g.like(par) for g in self.Gausses] + [glike]
                 lmany.append(par)
                 like=None
+                
                 slist.append(Sample(par,like, glikel))
-        likes=self.like(lmany)
+        likes= self.like(lmany)   
         for like,sa in zip(likes,slist):
             sa.like=like
-
+        
         return slist,G
 
 
