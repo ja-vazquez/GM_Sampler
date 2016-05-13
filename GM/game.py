@@ -112,7 +112,7 @@ class Game:
         self.N=len(par0)
         self.N1=1000 ## how many samples for each Gaussian
         self.N1f=4 ## subsample fast how much
-        self.blow=1.0 ## factor by which to increase the enveloping Gauss
+        self.blow=2.0 ## factor by which to increase the enveloping Gauss
         self.wemin=0.00  ### outputs weights with this shit
         self.mineffsamp=5000 ### minimum number effective samples that we require
         self.fixedcov=False
@@ -137,10 +137,11 @@ class Game:
         self.SamList= []
         
         self.Neffsample = []
-        self.all_means  = []
-        self.all_like = []
-        self.all_glikes=[]
+        
         self.all_KL_div = []
+        self.all_mean  = []
+        self.all_var   = []
+
         while not done:
             sample_list, G= self.isample (toexplore)
             self.Gausses.append(G)
@@ -149,24 +150,22 @@ class Game:
             toexplore= self.rebuild_samples(self.SamList, self.Gausses)
             
             self.Neffsample.append(self.effsamp/(self.N1*len(self.Gausses)))
-            self.all_means.append(G.mean)
             
-            for likes,glikes in zip(self.all_like, self.all_glikes):
-                we =likes/glikes
-                we/= we.max()
-                we/= we.sum()
-                dl = exp(-(we*log(we)).sum())
-                
-            self.all_KL_div.append(dl/(self.N1*len(self.Gausses)))
-                
-                
-            #print len(self.all_glikes[0]), len(self.all_like[0])
-            #all_glikes = [sa.glikes for sa in self.SamList]
-            #all_like   = [sa.like for sa in self.SamList]
-            #print np.array(all_likes).flatten(), 'hidhi'            
             
-            #self.all_KL_div.append(self.KL_div)
-            #print self.KL_div
+            weis = array([sa.we for sa in self.SamList])
+            norm = weis.sum()
+            
+            mean = self.some_stats(1, norm)
+            var  = self.some_stats(2, norm) - mean**2 
+            self.all_mean.append(mean)
+            self.all_var.append(var)
+            
+            #KL divergence
+            weis /= weis.max()
+            weis /= weis.sum()
+            KL = exp(-(weis*log(weis)).sum())/(self.N1*len(self.Gausses))
+            self.all_KL_div.append(KL)
+            
             
             if self.pickleBetween:
                 if (len(self.Gausses)%100 == 1):
@@ -181,6 +180,9 @@ class Game:
                 done=True
 
 
+    def some_stats(self, n, norm):
+        return array([sa.we*sa.pars**n for sa in self.SamList]).sum(axis=0)/norm
+        
 
     def gausses_eval(self, sam):
         if len(sam.glikes) != len(self.Gausses):
@@ -202,7 +204,6 @@ class Game:
             if (sa.glike > gmaxlike):
                 gmaxlike = sa.glike
                              
-                
         gmaxlike2= self.gausses_eval(maxlikesa)
         #gmaxlike=gmaxlike2
         wemax  = 0.0
@@ -211,9 +212,7 @@ class Game:
         parmaxw= None
         effsamp= 0
         
-        all_like = []
-        all_glikes=[]
-        
+
         for sa in SamList:        #Eq 6
             rellike= exp(sa.like-maxlike)
             glike  = sa.glike/gmaxlike
@@ -224,15 +223,12 @@ class Game:
                 parmaxw= sa.pars
             if we> self.wemin:
                 flist.append(sa)
-            all_like.append(rellike)
-            all_glikes.append(glike)
-        
+                
         
         #The highest weight counts one, others less
         wei = array([sa.we for sa in SamList])
-         
         wei/=wei.max()
-              
+           
         effsamp= wei.sum()        #Eq 7
         
         self.sample_list=flist
@@ -240,9 +236,6 @@ class Game:
             print "#G=",len(Gausses), "maxlike=",maxlike, "wemax=",wemax, "effsamp=",effsamp
         self.effsamp= effsamp
         self.wemax= wemax
-        
-        self.all_like.append(np.array(all_like))
-        self.all_glikes.append(np.array(all_glikes))
         
         return parmaxw
 
@@ -364,7 +357,6 @@ class Game:
 
         if self.verbose:
             print "fixed:",fxs,fx
-        #print cov
         G=Gaussian(around,self.blow*cov, self.fastpars)    
         return G
 
@@ -402,13 +394,16 @@ class Game:
                 like=None
                 
                 slist.append(Sample(par,like, glikel))
-        likes= self.calc_like(lmany) #self.like(lmany)   
-        
+                
+        #self.all_pars.append(lmany)
+        likes= self.calc_like(lmany) #instead of self.like(lmany)   
+                
         for like,sa in zip(likes,slist):
             sa.like=like
-        
-        
+           
         return slist,G
+
+
 
 
     def calc_like(self, lmany):   
@@ -430,7 +425,7 @@ class Game:
         final_result = [item for sublist in result_gather for item in sublist]
         #else:
         #    final_result = None
-        #print comm.rank, final_result, self.like(lmany)
+        
         #return self.like(lmany)
         return final_result
 

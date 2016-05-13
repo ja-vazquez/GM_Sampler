@@ -14,7 +14,7 @@ nprocs = comm.Get_size()
 myrank = comm.Get_rank()
 
 
-sp.random.seed(100)
+#sp.random.seed(100)
 
 def likemany(x):
     return map(like,x)
@@ -22,13 +22,13 @@ def likemany(x):
 
 if sys.argv[1]=='gauss':
     def like(x):
-        return -((x[0])**2+(x[1])**2/1.0-1.2*x[0]*x[1])/2.0  
-    ga=gs.Game(likemany,[0.5,-1.5],[1.,1.])
+        return -(x[0]**2+ x[1]**2/1.5 + 0.0*x[0]*x[1])/2.0
+    ga=gs.Game(likemany,[0.5,-1.5],[0.7, 0.7])
     ga.N1=300
     ga.maxiter= 50
     ga.N1f=0
-    ga.fastpars=[1]
-    ga.blow=1.
+    #ga.fastpars=[1]
+    ga.blow=1.3
     ga.mineffsamp=80000
     ga.fixedcov= False
     ga.verbose = False
@@ -37,14 +37,37 @@ if sys.argv[1]=='gauss':
     ga.run()
     print 'total time =',time.time()-initime
 
+elif sys.argv[1]=='tgauss':
+    def like(x):
+        if x[0]>3:
+            return -((x[0]-5)**2+ x[1]**2/1.5)  
+        if x[0]<-3:
+            return -((x[0]+5)**2+ x[1]**2/1.5)
+        else:
+            return -(x[0]**2+ x[1]**2/1.5 + 0.0*x[0]*x[1])/2.0
+    ga=gs.Game(likemany,[0.5,-1.5],[1., 1.])
+    ga.N1=100
+    ga.maxiter= 90
+    ga.N1f=0
+    ga.fastpars=[1]
+    ga.blow=1.
+    ga.mineffsamp=100000
+    ga.fixedcov= False
+    ga.verbose = False
+    sname='tgauss.pdf'
+    initime=time.time()
+    ga.run()
+    print 'total time =',time.time()-initime
+    
+
 elif sys.argv[1]=='ring':
     def like(x):
         r2=x[0]**2+x[1]**2
         return -(r2-4.0)**2/(2*0.5**2)
     ga=gs.Game(likemany,[3.5,0.0],[0.5,0.5])
-    ga.blow=1.0
+    ga.blow=2.0
     ga.N1=100
-    ga.maxiter=80
+    ga.maxiter=70
     ga.fixedcov= False
     ga.verbose =False
     sname='ring.pdf'
@@ -61,9 +84,9 @@ elif sys.argv[1]=='box':
     ga=gs.Game(likemany,[2.5,0.0],[.6,.6])
     #ga.priorlow=sp.array([-2.5,-2.5])
     #ga.priorhigh=sp.array([+2.5,+2.5])
-    ga.N1=800
+    ga.N1=200
     ga.mineffsamp=60000
-    ga.maxiter=50
+    ga.maxiter=40
     ga.fixedcov= False
     ga.verbose =False
     #ga.fixedcovuse= sp.array([[2,0],[0,2]])
@@ -75,22 +98,46 @@ else:
     sp.stop ("define")
 
 if myrank ==0:
- 
- pd.Series(ga.all_KL_div).plot()
- pylab.savefig('KL.pdf')
  if False:
+     fig, ax = plt.subplots()
+     pd.Series(ga.all_KL_div).plot()
+     plt.title('Kullback-Leibler (KL) Divergence')
+     ax.set_ylabel('KL')
+     ax.set_xlabel('# of Gauss')
+     pylab.savefig('KL.pdf')
+     plt.show()
+ if False:
+     fig, ax = plt.subplots()
      pd.Series(ga.Neffsample).plot()
+     plt.title('$N_{eff}$')
+     ax.set_ylabel('Neff')
+     ax.set_xlabel('# of Gauss')     
      pylab.savefig('conv.pdf')
- if False: 
-     all_means =pd.DataFrame(ga.all_means, columns =['x0', 'x1'])
-     all_means['num'] = sp.arange(ga.maxiter)
+     plt.show()
+ if True:      
+     all_mean =pd.DataFrame(ga.all_mean, columns =['x0', 'x1'])
+     all_mean['num'] = sp.arange(ga.maxiter)
+     all_var =pd.DataFrame(ga.all_var, columns =['x0', 'x1'])     
+     
      cmap = cm.get_cmap('cool')
-     sc =plt.scatter(all_means['x0'], all_means['x1'], c=all_means['num'], s=120, cmap=cmap) 
-     plt.colorbar(sc) 
-     plt.title('mean value for the Nth Gaussian')
+     plt.figure(figsize=(15, 6))
+     plt.title('Each G')
+     ax1 = pylab.subplot(1,2,1)
+     sc =ax1.scatter(all_mean['x0'], all_mean['x1'], c=all_mean['num'], s=100, cmap=cmap) 
+     cbar = plt.colorbar(sc) 
+     cbar.set_label('# of Gauss')
+     ax1.set_title('mean')
      plt.grid()
+         
+     ax2 = pylab.subplot(1,2,2)
+     sc =ax2.scatter(all_var['x0'], all_var['x1'], c=all_mean['num'], s=100, cmap=cmap)     
+     cbar = plt.colorbar(sc)
+     cbar.set_label('# of Gauss')
+     ax2.set_title('variance')
+     plt.grid()
+     
      plt.savefig('all_means.pdf')
-
+     #plt.show()
 ##---- now we plot --------------------------------------------
 xx= sp.array([sa.pars[0] for sa in ga.sample_list])
 yy= sp.array([sa.pars[1] for sa in ga.sample_list])
@@ -99,8 +146,8 @@ ww= sp.array([sa.we      for sa in ga.sample_list])
 
 
 Np   = 100
-cmin = -5.
-cmax = 5.
+cmin = -7.
+cmax = 7.
 cstep= (cmax-cmin)/(1.0*Np)
 
 sums  = sp.zeros((Np,Np))
@@ -126,11 +173,11 @@ for i in range(Np):
 trvalsa= trvals/trvals.sum()
 wsumsa = wsums/wsums.sum()
 diffp  = wsumsa-trvalsa
-vmax   = trvalsa.max()*1.
+vmax   = trvalsa.max()*1.1
 
 
 extent=[cmin,cmax,cmin,cmax]
-
+plt.figure(figsize=(15, 12))
 pylab.subplot(2,2,1)
 pylab.imshow(trvalsa, interpolation='nearest', origin='lower left',extent=extent, vmin=0, vmax=vmax)
 pylab.colorbar()
