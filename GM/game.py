@@ -1,9 +1,15 @@
 from scipy import *
 import random
 import scipy.linalg as la
+import numpy as np
 import cPickle
 import pylab
+from mpi4py import MPI
 
+comm = MPI.COMM_WORLD
+nprocs = comm.Get_size()
+myrank = comm.Get_rank()
+        
 class Sample:
     def __init__ (self,pars, like, glikes):
         self.pars=pars
@@ -63,7 +69,7 @@ class Gaussian:
         da=array([random.gauss(0.,1.) for x in range(self.N)])
         glike = -(da**2).sum()/2.0-self.lndet/2.0
         sa=dot(da,self.chol)
-        if (self.mean!=None):
+        if (self.mean is not None):
             sa+=self.mean
         return sa,glike
 
@@ -87,7 +93,7 @@ class Gaussian:
         return outsamp, glike
     
     def chi2(self,vec):
-        if mean!=None:
+        if mean is not None:
             delta=vec-self.mean
         else:
             delta=vec
@@ -106,7 +112,7 @@ class Game:
         self.N=len(par0)
         self.N1=1000 ## how many samples for each Gaussian
         self.N1f=4 ## subsample fast how much
-        self.blow=2.0 ## factor by which to increase the enveloping Gauss
+        self.blow=1.0 ## factor by which to increase the enveloping Gauss
         self.wemin=0.00  ### outputs weights with this shit
         self.mineffsamp=5000 ### minimum number effective samples that we require
         self.fixedcov=False
@@ -130,12 +136,37 @@ class Game:
         self.Gausses= []
         self.SamList= []
         
+        self.Neffsample = []
+        self.all_means  = []
+        self.all_like = []
+        self.all_glikes=[]
+        self.all_KL_div = []
         while not done:
             sample_list, G= self.isample (toexplore)
             self.Gausses.append(G)
             self.SamList += sample_list
             
             toexplore= self.rebuild_samples(self.SamList, self.Gausses)
+            
+            self.Neffsample.append(self.effsamp/(self.N1*len(self.Gausses)))
+            self.all_means.append(G.mean)
+            
+            for likes,glikes in zip(self.all_like, self.all_glikes):
+                we =likes/glikes
+                we/= we.max()
+                we/= we.sum()
+                dl = exp(-(we*log(we)).sum())
+                
+            self.all_KL_div.append(dl/(self.N1*len(self.Gausses)))
+                
+                
+            #print len(self.all_glikes[0]), len(self.all_like[0])
+            #all_glikes = [sa.glikes for sa in self.SamList]
+            #all_like   = [sa.like for sa in self.SamList]
+            #print np.array(all_likes).flatten(), 'hidhi'            
+            
+            #self.all_KL_div.append(self.KL_div)
+            #print self.KL_div
             
             if self.pickleBetween:
                 if (len(self.Gausses)%100 == 1):
@@ -145,6 +176,8 @@ class Game:
                 print "Max iter exceeded"
                 done=True
             if (self.effsamp > self.mineffsamp):
+                print self.effsamp , self.mineffsamp
+                print 'reach minimum number effective samples'
                 done=True
 
 
@@ -168,6 +201,7 @@ class Game:
             sa.glike= self.gausses_eval(sa) 
             if (sa.glike > gmaxlike):
                 gmaxlike = sa.glike
+                             
                 
         gmaxlike2= self.gausses_eval(maxlikesa)
         #gmaxlike=gmaxlike2
@@ -176,6 +210,10 @@ class Game:
         wemax  = 0.0
         parmaxw= None
         effsamp= 0
+        
+        all_like = []
+        all_glikes=[]
+        
         for sa in SamList:        #Eq 6
             rellike= exp(sa.like-maxlike)
             glike  = sa.glike/gmaxlike
@@ -186,17 +224,26 @@ class Game:
                 parmaxw= sa.pars
             if we> self.wemin:
                 flist.append(sa)
-
+            all_like.append(rellike)
+            all_glikes.append(glike)
+        
+        
         #The highest weight counts one, others less
         wei = array([sa.we for sa in SamList])
+         
         wei/=wei.max()
+              
         effsamp= wei.sum()        #Eq 7
-
-        self.sample_list=flist
         
-        print "#G=",len(Gausses), "maxlike=",maxlike, "wemax=",wemax, "effsamp=",effsamp
+        self.sample_list=flist
+        if self.verbose:
+            print "#G=",len(Gausses), "maxlike=",maxlike, "wemax=",wemax, "effsamp=",effsamp
         self.effsamp= effsamp
         self.wemax= wemax
+        
+        self.all_like.append(np.array(all_like))
+        self.all_glikes.append(np.array(all_glikes))
+        
         return parmaxw
 
                         
@@ -355,11 +402,38 @@ class Game:
                 like=None
                 
                 slist.append(Sample(par,like, glikel))
-        likes= self.like(lmany)   
+        likes= self.calc_like(lmany) #self.like(lmany)   
+        
         for like,sa in zip(likes,slist):
             sa.like=like
         
+        
         return slist,G
+
+
+    def calc_like(self, lmany):   
+        x = lmany
+        
+        chunks = [[] for _ in np.arange(nprocs)]
+        n= np.ceil(float(len(x))/nprocs)
+        for i, chunk in enumerate(x):
+            chunks[int(i//n)].append(chunk)
+        
+        scatter= comm.scatter(chunks, root=0)
+        
+        #print map(self.like, chunks)
+        result_per_node = map(self.like, [scatter])
+        
+        result_gather   = comm.allgather(result_per_node[0])
+        
+        #if myrank == 0:
+        final_result = [item for sublist in result_gather for item in sublist]
+        #else:
+        #    final_result = None
+        #print comm.rank, final_result, self.like(lmany)
+        #return self.like(lmany)
+        return final_result
+
 
 
 def plotel(G,i=0, j=1,fmt='r-', times=1, verbose=False):

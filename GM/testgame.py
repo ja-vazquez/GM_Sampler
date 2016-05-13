@@ -2,8 +2,17 @@
 import game as gs
 import scipy as sp
 import pylab, sys
-
+import time
+import pandas as pd
+import matplotlib.pylab as plt 
+from mpi4py import MPI
+from matplotlib import cm
 #import scipy.linalg as linalg
+
+comm = MPI.COMM_WORLD
+nprocs = comm.Get_size()
+myrank = comm.Get_rank()
+
 
 sp.random.seed(100)
 
@@ -13,33 +22,35 @@ def likemany(x):
 
 if sys.argv[1]=='gauss':
     def like(x):
-        return -((x[0])**2+(x[1])**2/1.0-1.5*x[0]*x[1])/2.0
-    ga=gs.Game(likemany,[0.5,-1.5],[1.0,1.0])
-    ga.N1=10
-    ga.maxiter= 3
+        return -((x[0])**2+(x[1])**2/1.0-1.2*x[0]*x[1])/2.0  
+    ga=gs.Game(likemany,[0.5,-1.5],[1.,1.])
+    ga.N1=300
+    ga.maxiter= 50
     ga.N1f=0
     ga.fastpars=[1]
-    ga.blow=1.3
-    ga.mineffsamp=8000
+    ga.blow=1.
+    ga.mineffsamp=80000
     ga.fixedcov= False
     ga.verbose = False
     sname='gauss.pdf'
+    initime=time.time()
     ga.run()
-
+    print 'total time =',time.time()-initime
 
 elif sys.argv[1]=='ring':
     def like(x):
         r2=x[0]**2+x[1]**2
         return -(r2-4.0)**2/(2*0.5**2)
-    ga=gs.Game(likemany,[3.5,0.0],[0.4,0.4])
-    ga.blow=2.0
-    ga.N1=50
-    ga.maxiter=30
+    ga=gs.Game(likemany,[3.5,0.0],[0.5,0.5])
+    ga.blow=1.0
+    ga.N1=100
+    ga.maxiter=80
     ga.fixedcov= False
     ga.verbose =False
     sname='ring.pdf'
+    initime=time.time()
     ga.run()
-
+    print 'total time =',time.time()-initime
 
 elif sys.argv[1]=='box':
     def like(x):
@@ -47,26 +58,44 @@ elif sys.argv[1]=='box':
             return -30
         else:
             return 0
-    ga=gs.Game(likemany,[2.5,0.0],[1.0,1.0])
-    #ga.priorlow=array([-2.5,-2.5])
-    #ga.priorhigh=array([+2.5,+2.5])
-    ga.N1=50
-    ga.mineffsamp=6000
-    ga.maxiter=20
+    ga=gs.Game(likemany,[2.5,0.0],[.6,.6])
+    #ga.priorlow=sp.array([-2.5,-2.5])
+    #ga.priorhigh=sp.array([+2.5,+2.5])
+    ga.N1=800
+    ga.mineffsamp=60000
+    ga.maxiter=50
     ga.fixedcov= False
-    ga.fixedcovuse= sp.array([[2,0],[0,2]])
+    ga.verbose =False
+    #ga.fixedcovuse= sp.array([[2,0],[0,2]])
     ga.run()
     sname='box.pdf'
+    
+
 else:
     sp.stop ("define")
 
-
-
+if myrank ==0:
+ 
+ pd.Series(ga.all_KL_div).plot()
+ pylab.savefig('KL.pdf')
+ if False:
+     pd.Series(ga.Neffsample).plot()
+     pylab.savefig('conv.pdf')
+ if False: 
+     all_means =pd.DataFrame(ga.all_means, columns =['x0', 'x1'])
+     all_means['num'] = sp.arange(ga.maxiter)
+     cmap = cm.get_cmap('cool')
+     sc =plt.scatter(all_means['x0'], all_means['x1'], c=all_means['num'], s=120, cmap=cmap) 
+     plt.colorbar(sc) 
+     plt.title('mean value for the Nth Gaussian')
+     plt.grid()
+     plt.savefig('all_means.pdf')
 
 ##---- now we plot --------------------------------------------
 xx= sp.array([sa.pars[0] for sa in ga.sample_list])
 yy= sp.array([sa.pars[1] for sa in ga.sample_list])
 ww= sp.array([sa.we      for sa in ga.sample_list])
+
 
 
 Np   = 100
@@ -125,8 +154,8 @@ pylab.subplot(2,2,4)
 pylab.imshow(diffp, interpolation='nearest', origin='lower left',extent=extent)
 pylab.colorbar()
 
-print trvalsa.max(), wsumsa.max(),diffp.max()
-print trvalsa.min(), wsumsa.min(),diffp.min()
+#print trvalsa.max(), wsumsa.max(),diffp.max()
+#print trvalsa.min(), wsumsa.min(),diffp.min()
 
 
 mx= (xx*ww).sum()/(ww.sum())
@@ -137,13 +166,15 @@ rr= xx**2+yy**2
 mr= (rr*ww).sum()/(ww.sum())
 vr= sp.sqrt((rr**2*ww).sum()/(ww.sum())-mr*mr)
 
-print 'xmean,xvar=',mx,vx
-print 'ymean,yvar=',my,vy
-print 'rmean,rvar=',mr,vr
+#print 'xmean,xvar=',mx,vx
+#print 'ymean,yvar=',my,vy
+#print 'rmean,rvar=',mr,vr
 
 
 pylab.savefig(sname)
 #pylab.show()
+
+
 
 
 
