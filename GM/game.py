@@ -136,8 +136,7 @@ class Game:
         self.Gausses= []
         self.SamList= []
         
-        self.Neffsample = []
-        
+        self.Neffsample = []  
         self.all_KL_div = []
         self.all_mean  = []
         self.all_var   = []

@@ -145,7 +145,7 @@ ww= sp.array([sa.we      for sa in ga.sample_list])
 
 
 
-Np   = 100
+Np   = 300
 cmin = -7.
 cmax = 7.
 cstep= (cmax-cmin)/(1.0*Np)
@@ -172,7 +172,8 @@ for i in range(Np):
 
 trvalsa= trvals/trvals.sum()
 wsumsa = wsums/wsums.sum()
-diffp  = wsumsa-trvalsa
+diffp  = (wsumsa-trvalsa)/wsumsa
+
 vmax   = trvalsa.max()*1.1
 
 
