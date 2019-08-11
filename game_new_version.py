@@ -5,13 +5,10 @@ import numpy as np
 import random
 import sys
 
-import matplotlib.pyplot as plt
-import matplotlib.colors
 
-## TODO add second gaussian
 
-## TODO add when covariance is not fix
-## TODO Draw the 2D gaussian
+## TODO Compute hessian using scipy
+## TODO check old file that contains KL
 
 class Sample:
     def __init__(self, positions, datalike, allglikes=[]):
@@ -20,6 +17,7 @@ class Sample:
         self.allglikes = allglikes
 
         self.maxglike  = 0
+
 
 
 class Gaussian:
@@ -31,6 +29,7 @@ class Gaussian:
         self.lndet = sp.log(self.chol.diagonal()).sum()*2.0
         self.incov = linal.inv(cov)
         self.Npars = len(cov)
+
 
     def samples(self):
             #Place the position of the sample within the gaussian
@@ -57,25 +56,26 @@ class GMS:
     def __init__(self, likelifun, params, sigma=0.0):
         """main function, input the likelihood, set of
             parameters and their initial covariance matrix"""
+        self.likeli    = likelifun
+        self.params    = sp.array(params)
+        self.sigma     = sp.array(sigma)
+        self.Nparams   = len(params)
+        self.fixcov    = False
+        self.Nsamples  = 5
+        self.weigmin   = 0.0
+        self.blow      = 1.0  #increase the enveloping Gauss
+
+        self.tweight   = 2.0
+        self.maxGaus   = 1
+        self.mineffsam = self.Nsamples*1
+
+        self.effsample = 0.0
+        self.weightmax = 0.0
+        self.maxlike   = 0.0
+
         random.seed(100)
-
-        self.likeli   = likelifun
-        self.params   = sp.array(params)
-        self.sigma    = sp.array(sigma)
-        self.Nparams  = len(params)
-        self.fixcov   = False
-        self.weigmin  = 0.0
-        self.Nsamples = 5
-
-        self.effsample= 0.0
-        self.weightmax= 0.0
-        self.maxlike  = 0.0
-
             #For plotting purposes
-        self.plot    = True
-        self.ppos    = []
-        self.plikes  = []
-
+        self.plot      = True
 
 
     def run(self):
@@ -83,19 +83,30 @@ class GMS:
         self.GaussList    = []
         self.SamplingList = []
 
+        slist = []
         positions =  self.params
-        print positions, self.sigma
+        print 'initial position', positions
 
         while not done:
             sample_list, G = self.sampling(positions)
+
             self.GaussList.append(G)
-            self.SamplingList+= sample_list
+            self.SamplingList.extend(sample_list)
 
             positions = self.rebuild_samples(self.SamplingList, self.GaussList)
+            slist.append(sample_list)
+
+            if (self.weightmax < self.tweight):         done = True
+            if (len(self.GaussList) >= self.maxGaus):   done = True
+            #if (self.effsample < self.mineffsam):       done = True
+
+            print ''
             print "#G=", len(self.GaussList), "wemax=", self.weightmax,  'maxlike=', self.maxlike
             print  "new_position=", positions, "effsamp=", self.effsample, "total samples", self.Nsamples
+            print ''
 
-            done =True
+        if self.plot: self.plot_gaussian(self.GaussList, slist)
+
 
 
     def glikes_to_probs(self, sam):
@@ -103,6 +114,7 @@ class GMS:
             sys.exit("SHIT")
         probability = (sp.exp(sam.allglikes)).sum()
         return probability
+
 
 
     def rebuild_samples(self, SamplingList, GaussList):
@@ -136,7 +148,7 @@ class GMS:
             if weight > self.weigmin:
                 finallist.append(sam)
         if finallist != self.SamplingList:
-            print 'something fishy'
+            print 'something is fishy'
             self.SamplingList =finallist
 
         self.effsample = effsample
@@ -171,7 +183,6 @@ class GMS:
             ### first populating where to evaluate like
             ### and the popping hoping for perfect sync
 
-            print posit, delta
             for i in sp.arange(Nparams):
                 parspi     = params*1.0
                 parsmi     = params*1.0
@@ -195,7 +206,37 @@ class GMS:
                         posit.append(parspm)
                         posit.append(parsmp)
 
-            print 'parspi', posit
+            likes = map(self.likeli, posit)
+            #Compute hessian using scipy
+            print '--', likes, len(likes), len(posit)
+
+            like0 = likes.pop(0)
+            for i in sp.arange(Nparams):
+                for j in sp.arange(Nparams):
+                    if (i==j):
+                        hes = (likes.pop(0) + likes.pop(0) - 2*like0)/(delta[i]**2)
+                    else:
+                        hes = (likes.pop(0) + likes.pop(0) - likes.pop(0) - likes.pop(0))/(4*delta[i]*delta[j])
+                    icov[i, j] = -hes
+                    icov[j, i] = -hes
+            print '**', icov
+
+            while True:
+                print "Try cholesky"
+                #in the previous version, first we regularized and then try cholesky
+                try:
+                    ch =linal.cholesky(icov)
+                    break
+                except:
+                    print 'Regularize'
+                    for i in range(Nparams):
+                        icov[i, i] += 1./self.sigma[i]**2
+                    pass
+
+            cov = linal.inv(icov)
+            print cov
+            G = Gaussian(params, cov*self.blow)
+            return G
 
 
 
@@ -204,67 +245,74 @@ class GMS:
         G = self.getcov(params)
 
             #First update the old samples, the first step is empty
-        for _, sam in enumerate(self.SamplingList):
-            sam.allglikes.append(G.like(sam.positions)) #check
+        for _ , sam in enumerate(self.SamplingList):
+            sam.allglikes.append(G.like(sam.positions))
 
 
         gsamlist   = []
         for _ in sp.arange(self.Nsamples):
             positions, glikes = G.samples()
-            datalike          = self.likeli(positions) #this line may substitutes below lines
-            allglikes         = [glikes]               #list of likelihood of this point
+            datalike          = self.likeli(positions) #modified
+                 #list of likelihood of this point
+            allglikes         = [g.like(positions) for g in self.GaussList] + [glikes]
             gsamlist.append(Sample(positions, datalike, allglikes))
-            if self.plot:
-                self.ppos.append(positions)
-                self.plikes.append(glikes)
-
-            #For plotting purposes
-        if self.plot: self.plot_gaussian(G)
 
         return gsamlist, G
 
 
 #---- Plotting tests ----------------#
-    def plot_gaussian(self, G):
-        from matplotlib.patches import Ellipse
-        fig = plt.figure(figsize=(9,6))
-        ax = fig.add_subplot(111, aspect='equal')
+    def plot_gaussian(self, GaussianList, slist):
 
-        cmap = plt.cm.rainbow
-        norm = matplotlib.colors.Normalize(vmin=-2, vmax=2)
-        plt.scatter(zip(*self.ppos)[0], zip(*self.ppos)[1], color=cmap(norm(self.plikes)))
+        import matplotlib.pyplot as plt
+        import matplotlib.colors
+        from matplotlib.patches import Ellipse
+
+        fig = plt.figure(figsize=(7,6))
+        ax = fig.add_subplot(111, aspect='equal')
+        plt.grid(linewidth=1, alpha=0.3)
+
+        cmap = plt.cm.hsv
+        norm = matplotlib.colors.Normalize(vmin=0, vmax=8.)
+        for i, sl in enumerate(slist):
+            positions = [s.positions for s in sl]
+            colors    = 2*i+sp.rand(50)
+            ax.scatter(zip(*positions)[0], zip(*positions)[1], c=cmap(norm(colors)), alpha=0.75)
+
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         plt.colorbar(sm)
 
         print "---now plotting --"
-        mn, cov     = G.mean, G.cov
-        val, eigvec = linal.eig(cov)
-        vec = eigvec.T
+        cols= ['orange', 'green', 'blue', 'purple', 'red']
+        for i, G in enumerate(GaussianList):
+            mn, cov     = G.mean, G.cov
+            val, eigvec = linal.eig(cov)
+            vec = eigvec.T
 
-        vec[0] *= sp.sqrt(2.3*sp.real(val[0]))
-        vec[1] *= sp.sqrt(2.3*sp.real(val[1]))
+            vec[0] *= sp.sqrt(2.3*sp.real(val[0]))
+            vec[1] *= sp.sqrt(2.3*sp.real(val[1]))
 
-        plt.plot(mn[0], mn[1], 'bo', markersize=10, color='black')
-        plt.plot([mn[0]-vec[0][0], mn[0]+vec[0][0]],
-                  [mn[1]-vec[0][1], mn[1]+vec[0][1]],'k-')
-        plt.plot([mn[0]-vec[1][0], mn[0]+vec[1][0]],
-                  [mn[1]-vec[1][1], mn[1]+vec[1][1]],'k-')
+            plt.plot([mn[0]-vec[0][0], mn[0]+vec[0][0]],
+                      [mn[1]-vec[0][1], mn[1]+vec[0][1]], color=cols[i])
+            plt.plot([mn[0]-vec[1][0], mn[0]+vec[1][0]],
+                      [mn[1]-vec[1][1], mn[1]+vec[1][1]], color=cols[i])
+            plt.plot(mn[0], mn[1], 'bo', markersize=8, color='black')
 
-        def eigsorted(cov):
-            vals, vecs = np.linalg.eigh(cov)
-            order = vals.argsort()[::-1]
-            return vals[order], vecs[:,order]
+            def eigsorted(cov):
+                vals, vecs = np.linalg.eigh(cov)
+                order = vals.argsort()[::-1]
+                return vals[order], vecs[:,order]
 
-        vals, vecs = eigsorted(cov)
-        theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
+            vals, vecs = eigsorted(cov)
+            theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
 
-        sigmas = [2.3, 5.99] #, 11.83]
-        for sigs in sigmas:
-            w, h = 2  * np.sqrt(vals) * np.sqrt(sigs)
-            ell = Ellipse(xy=(mn[0], mn[1]),  width = w, height = h,
-                          angle=theta, color='black', lw=3)
-            ell.set_facecolor('none')
-            ax.add_artist(ell)
+            sigmas = [2.3, 5.99] #, 11.83]
+            for sigs in sigmas:
+                w, h = 2  * np.sqrt(vals) * np.sqrt(sigs)
+                ell = Ellipse(xy=(mn[0], mn[1]),  width = w, height = h,
+                              angle=theta, color=cols[i], lw=1, alpha=0.75)
+                ell.set_facecolor('none')
+                ax.add_artist(ell)
+
         plt.savefig('GMS.pdf')
 

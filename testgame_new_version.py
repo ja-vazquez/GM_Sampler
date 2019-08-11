@@ -11,12 +11,12 @@ def likemany(x):
 
 if sys.argv[1]=='gauss':
     def like(x):
-        return -((x[0])**2+(x[1])**2/2.0- 2.0*x[0]*x[1])/2.0
+        return -((x[0])**2+(x[1])**2/1.0- 0.0*x[0]*x[1])/2.0
     ga=GMS(likemany,[0.0,1.0], [0.4, 0.5])
-    ga.N1=1000
-    ga.tweight=1.50
-    ga.mineffsamp=5000
-    sname='gauss.pdf'
+    #ga.N1=1000
+    #ga.tweight=1.50
+    #ga.mineffsamp=5000
+    #sname='gauss.pdf'
     ga.run()
 
 
@@ -24,10 +24,10 @@ elif sys.argv[1]=='ring':
     def like(x):
         r2=x[0]**2+x[1]**2
         return -(r2-4.0)**2/(2*0.5**2)
-    ga=Game(likemany,[3.5,0.0],[0.5,0.9])
-    ga.blow=2.0
-    ga.tweight=1.50
-    sname='ring.pdf'
+    ga=GMS(likemany,[3.5,0.0],[0.5,0.9])
+    #ga.blow=2.0
+    #ga.tweight=1.50
+    #sname='ring.pdf'
     ga.run()
 
 elif sys.argv[1]=='box':
@@ -36,11 +36,11 @@ elif sys.argv[1]=='box':
             return -30
         else:
             return 0
-    ga=Game(likemany,[0.5,0.0],[0.4,0.4])
-    ga.tweight=1.5
-    ga.N1=1000
+    ga=GMS(likemany,[0.5,0.0],[0.4,0.4])
+    #ga.tweight=1.5
+    #ga.N1=1000
     ga.run()
-    sname='box.pdf'
+    #sname='box.pdf'
 else:
     stop ("define")
 
